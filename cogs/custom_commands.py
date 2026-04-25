@@ -20,13 +20,7 @@ _MARKDOWN_HINT = (
     "> Citation    -  élément de liste"
 )
 
-_CONTENT_PLACEHOLDER = (
-    "Exemple :\n"
-    "**🛒 Nos prix**\n\n"
-    "> Pack Starter — 5€\n"
-    "> Pack Pro     — 15€\n\n"
-    "Contactez le staff pour commander !"
-)
+_CONTENT_PLACEHOLDER = "**Titre**\n> Citation\n`code inline`\nTexte libre avec markdown Discord…"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
