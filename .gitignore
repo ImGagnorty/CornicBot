@@ -1,0 +1,23 @@
+# Environnement
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Base de données (locale uniquement)
+*.db
+*.db-shm
+*.db-wal
+
+# IDE
+.vscode/
+.idea/
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

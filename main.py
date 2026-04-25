@@ -1,0 +1,156 @@
+"""
+CornicBot — Point d'entrée principal.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import logging
+import traceback
+
+import discord
+from discord.ext import commands
+from dotenv import load_dotenv
+
+from utils.database import Database
+from utils.embed_factory import EmbedFactory
+
+load_dotenv()
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Logging
+# ──────────────────────────────────────────────────────────────────────────────
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("CornicBot")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Classe Bot
+# ──────────────────────────────────────────────────────────────────────────────
+
+class CornicBot(commands.Bot):
+
+    def __init__(self) -> None:
+        intents = discord.Intents.default()
+        intents.message_content = True
+        intents.members = True
+
+        super().__init__(
+            command_prefix="$",
+            intents=intents,
+            help_command=None,
+            description="CornicBot — Système de tickets professionnel",
+        )
+        self.db = Database()
+
+    # ── Setup hook (avant on_ready) ───────────────
+
+    async def setup_hook(self) -> None:
+        # Base de données
+        await self.db.initialize()
+        logger.info("Base de données initialisée.")
+
+        # Chargement des cogs
+        for filename in sorted(os.listdir("./cogs")):
+            if filename.endswith(".py") and not filename.startswith("_"):
+                ext = f"cogs.{filename[:-3]}"
+                try:
+                    await self.load_extension(ext)
+                    logger.info(f"Cog chargé : {ext}")
+                except Exception as e:
+                    logger.error(f"Erreur chargement {ext} : {e}")
+                    traceback.print_exc()
+
+        # Vues persistantes (survivent au redémarrage du bot)
+        from cogs.tickets import TicketCreateView, TicketActionView
+        self.add_view(TicketCreateView())
+        self.add_view(TicketActionView())
+        logger.info("Vues persistantes enregistrées.")
+
+        # Synchronisation des slash commands
+        guild_id = os.getenv("GUILD_ID")
+        if guild_id:
+            guild = discord.Object(id=int(guild_id))
+            self.tree.copy_global_to(guild=guild)
+            await self.tree.sync(guild=guild)
+            logger.info(f"Slash commands synchronisées sur le serveur {guild_id}.")
+        else:
+            await self.tree.sync()
+            logger.info("Slash commands synchronisées globalement.")
+
+    # ── on_ready ─────────────────────────────────
+
+    async def on_ready(self) -> None:
+        EmbedFactory.set_bot_icon(self.user.display_avatar.url)
+        logger.info(f"Connecté en tant que {self.user} (ID: {self.user.id})")
+        logger.info(f"Présent sur {len(self.guilds)} serveur(s).")
+
+        await self.change_presence(
+            activity=discord.Activity(
+                type=discord.ActivityType.watching,
+                name="🎫 Les tickets | /setup_tickets",
+            ),
+            status=discord.Status.online,
+        )
+
+    # ── Gestion globale des erreurs ────────────────
+
+    async def on_command_error(
+        self, ctx: commands.Context, error: commands.CommandError
+    ) -> None:
+        if isinstance(error, commands.CommandNotFound):
+            return  # Les commandes perso sont gérées dans le cog
+        if isinstance(error, commands.NoPrivateMessage):
+            await ctx.send(
+                embed=EmbedFactory.error("Serveurs uniquement", "Cette commande ne peut être utilisée qu'en serveur.")
+            )
+            return
+        logger.error(f"Erreur commande '{ctx.command}': {error}")
+
+    async def on_app_command_error(
+        self,
+        interaction: discord.Interaction,
+        error: discord.app_commands.AppCommandError,
+    ) -> None:
+        msg = str(error)
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    embed=EmbedFactory.error("Erreur", msg), ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    embed=EmbedFactory.error("Erreur", msg), ephemeral=True
+                )
+        except Exception:
+            pass
+        logger.error(f"Erreur app_command: {error}")
+
+    async def close(self) -> None:
+        await self.db.close()
+        await super().close()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Lancement
+# ──────────────────────────────────────────────────────────────────────────────
+
+async def main() -> None:
+    token = os.getenv("TOKEN")
+    if not token:
+        logger.critical("TOKEN manquant dans le fichier .env !")
+        return
+
+    bot = CornicBot()
+    async with bot:
+        await bot.start(token)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

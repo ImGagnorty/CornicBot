@@ -1,0 +1,25 @@
+# ──────────────────────────────────────────────────────────────
+#  Fichier systemd pour déploiement sur VPS Linux
+#  Installation :
+#    sudo cp cornicbot.service /etc/systemd/system/
+#    sudo systemctl daemon-reload
+#    sudo systemctl enable --now cornicbot
+# ──────────────────────────────────────────────────────────────
+
+[Unit]
+Description=CornicBot — Discord Ticket Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/CornicBot
+ExecStart=/home/ubuntu/CornicBot/.venv/bin/python main.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
