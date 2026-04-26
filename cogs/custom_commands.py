@@ -34,6 +34,12 @@ class CreateCommandModal(discord.ui.Modal, title="✏️  Nouvelle commande"):
         min_length=1,
         max_length=30,
     )
+    cmd_title = discord.ui.TextInput(
+        label="Titre affiché (optionnel)",
+        placeholder="ex: 🛒 Notre Boutique  |  📢 Annonce importante",
+        max_length=100,
+        required=False,
+    )
     content = discord.ui.TextInput(
         label="Contenu — markdown Discord supporté",
         placeholder=_CONTENT_PLACEHOLDER,
@@ -48,6 +54,7 @@ class CreateCommandModal(discord.ui.Modal, title="✏️  Nouvelle commande"):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         name = self.cmd_name.value.strip().lower()
+        custom_title = self.cmd_title.value.strip() or None
 
         if self._cog.bot.get_command(name):
             await interaction.response.send_message(
@@ -61,15 +68,16 @@ class CreateCommandModal(discord.ui.Modal, title="✏️  Nouvelle commande"):
             return
 
         await self._cog.bot.db.create_command(
-            interaction.guild_id, name, self.content.value, interaction.user.id
+            interaction.guild_id, name, self.content.value,
+            interaction.user.id, title=custom_title,
         )
 
-        # Aperçu du rendu final
         preview = EmbedFactory.custom_command_frame(
             cmd_name=name,
             content=self.content.value,
             author=interaction.user,
             guild=interaction.guild,
+            title=custom_title,
         )
         confirm = EmbedFactory.custom_command_created(name, interaction.guild)
 
@@ -80,6 +88,12 @@ class CreateCommandModal(discord.ui.Modal, title="✏️  Nouvelle commande"):
 
 
 class EditCommandModal(discord.ui.Modal, title="✏️  Modifier une commande"):
+    cmd_title = discord.ui.TextInput(
+        label="Titre affiché (optionnel)",
+        placeholder="ex: 🛒 Notre Boutique  |  📢 Annonce importante",
+        max_length=100,
+        required=False,
+    )
     content = discord.ui.TextInput(
         label="Nouveau contenu — markdown Discord supporté",
         style=discord.TextStyle.paragraph,
@@ -87,15 +101,19 @@ class EditCommandModal(discord.ui.Modal, title="✏️  Modifier une commande"):
         max_length=2000,
     )
 
-    def __init__(self, cog: "CustomCommandsCog", name: str, current_content: str) -> None:
+    def __init__(self, cog: "CustomCommandsCog", name: str, current_title: Optional[str], current_content: str) -> None:
         super().__init__()
         self._cog = cog
         self._name = name
+        self.cmd_title.default = current_title or ""
         self.content.default = current_content
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
+        custom_title = self.cmd_title.value.strip() or None
+
         await self._cog.bot.db.create_command(
-            interaction.guild_id, self._name, self.content.value, interaction.user.id
+            interaction.guild_id, self._name, self.content.value,
+            interaction.user.id, title=custom_title,
         )
 
         preview = EmbedFactory.custom_command_frame(
@@ -103,6 +121,7 @@ class EditCommandModal(discord.ui.Modal, title="✏️  Modifier une commande"):
             content=self.content.value,
             author=interaction.user,
             guild=interaction.guild,
+            title=custom_title,
         )
         confirm = EmbedFactory.success(
             "Commande mise à jour",
@@ -150,6 +169,7 @@ class CustomCommandsCog(commands.Cog, name="CustomCommandsCog"):
             content=row["content"],
             author=message.author,
             guild=message.guild,
+            title=row["title"],
         )
         await message.channel.send(embed=embed)
 
@@ -185,7 +205,7 @@ class CustomCommandsCog(commands.Cog, name="CustomCommandsCog"):
             )
             return
         await interaction.response.send_modal(
-            EditCommandModal(self, name.lower(), row["content"])
+            EditCommandModal(self, name.lower(), row["title"], row["content"])
         )
 
     @cmds_group.command(name="delete", description="Supprime une commande personnalisée.")
@@ -230,6 +250,7 @@ class CustomCommandsCog(commands.Cog, name="CustomCommandsCog"):
             content=row["content"],
             author=interaction.user,
             guild=interaction.guild,
+            title=row["title"],
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 

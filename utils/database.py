@@ -20,6 +20,7 @@ class Database:
         self._db = await aiosqlite.connect(DB_PATH)
         self._db.row_factory = aiosqlite.Row
         await self._create_tables()
+        await self._migrate()
 
     async def close(self) -> None:
         if self._db:
@@ -28,6 +29,14 @@ class Database:
     # ──────────────────────────────────────────────
     #  Création des tables
     # ──────────────────────────────────────────────
+
+    async def _migrate(self) -> None:
+        """Ajoute les colonnes manquantes sur une base existante."""
+        try:
+            await self._db.execute("ALTER TABLE custom_commands ADD COLUMN title TEXT")
+            await self._db.commit()
+        except Exception:
+            pass  # Colonne déjà présente
 
     async def _create_tables(self) -> None:
         await self._db.executescript("""
@@ -58,6 +67,7 @@ class Database:
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 guild_id    INTEGER NOT NULL,
                 name        TEXT    NOT NULL,
+                title       TEXT,
                 content     TEXT    NOT NULL,
                 created_by  INTEGER NOT NULL,
                 created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -190,15 +200,18 @@ class Database:
     # ──────────────────────────────────────────────
 
     async def create_command(
-        self, guild_id: int, name: str, content: str, created_by: int
+        self, guild_id: int, name: str, content: str, created_by: int,
+        title: Optional[str] = None,
     ) -> None:
         await self._db.execute(
             """
-            INSERT INTO custom_commands (guild_id, name, content, created_by)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(guild_id, name) DO UPDATE SET content = excluded.content
+            INSERT INTO custom_commands (guild_id, name, title, content, created_by)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(guild_id, name) DO UPDATE SET
+                title   = excluded.title,
+                content = excluded.content
             """,
-            (guild_id, name.lower(), content, created_by),
+            (guild_id, name.lower(), title or None, content, created_by),
         )
         await self._db.commit()
 

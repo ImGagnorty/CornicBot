@@ -327,10 +327,12 @@ class EmbedFactory:
         content: str,
         author: discord.Member,
         guild: discord.Guild,
+        title: Optional[str] = None,
     ) -> discord.Embed:
         """Encapsule une commande personnalisée dans un 'Template Frame' stylisé."""
+        display_title = title if title else f"{Emojis.CMD}  Commande : `{cmd_name}`"
         embed = cls._base(
-            title=f"{Emojis.CMD}  Commande : `{cmd_name}`",
+            title=display_title,
             description=content,
             color=Colors.DARK,
             guild=guild,
